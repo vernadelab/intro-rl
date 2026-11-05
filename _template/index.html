@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lecture Template</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/theme.css">
+</head>
+<!-- Copy this folder to lecture-NN-topic/ and edit. Every building block is shown once below. -->
+<body data-lecture="RL · Lecture N · Title" data-author="Claire Vernade">
+<main class="deck">
+
+<section class="slide title-slide">
+  <h1>Lecture title</h1>
+  <div class="subtitle">Reinforcement Learning · Lecture N</div>
+  <div class="author">Claire Vernade</div>
+  <div class="affil">University of Technology Nuremberg</div>
+  <div class="date">DD Month 2026</div>
+</section>
+
+<section class="slide section">
+  <div class="num">Part 1</div>
+  <h2>Section divider</h2>
+  <p>One-line summary of the part.</p>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">Optional kicker</span>Standard content slide</h2>
+  <ul>
+    <li>Plain bullet</li>
+    <li class="fragment">Appears on next key press (class="fragment")</li>
+    <li class="fragment">Inline math $\Vpi(s) = \E_\pi[G_t \mid S_t = s]$, display math below</li>
+  </ul>
+  <div class="fragment">$$\Vstar(s) = \max_a \Big( r(s,a) + \gamma \sum_{s'} P(s'|s,a)\, \Vstar(s') \Big)$$</div>
+  <div class="todo">Yellow TODO boxes are for you only. Press T to hide them.</div>
+  <aside class="notes">Speaker notes: press N to show them here, S to open a presenter window.</aside>
+</section>
+
+<section class="slide">
+  <h2>Boxes</h2>
+  <div class="cols">
+    <div>
+      <div class="box definition"><span class="box-title">Definition</span>Blue: definitions.</div>
+      <div class="box theorem"><span class="box-title">Theorem</span>Green: results and take-aways.</div>
+    </div>
+    <div>
+      <div class="box practice"><span class="box-title">Let's practice</span>Orange: by-hand exercises.</div>
+      <div class="box discuss"><span class="box-title">Discuss with your neighbour</span>Dashed: questions to the room.</div>
+      <div class="box algo"><span class="box-title">Algorithm</span><ol><li>step one</li><li>step two</li></ol></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide practice-slide">
+  <h2>Let's practice: maze component</h2>
+  <div class="cols c-40-60">
+    <div class="maze" data-values="iterate" data-algo="vi" data-gamma="0.9" data-arrows="greedy" data-size="380" data-controls="step,run,reset" data-click="backup" data-info="#tpl-info"></div>
+    <div>
+      <p class="small">Attributes: <code>data-values</code> none | exact | blank | iterate · <code>data-algo</code> pe | vi | pi · <code>data-policy</code> uniform | optimal | small | big · <code>data-arrows</code> policy | greedy · <code>data-controls</code> step, run, reset, gamma, reveal · <code>data-click="backup"</code> · <code>data-info="#id"</code> · <code>data-slip</code></p>
+      <div id="tpl-info"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+<script src="../assets/katex/katex.min.js"></script>
+<script src="../assets/katex/auto-render.min.js"></script>
+<script src="../assets/macros.js"></script>
+<script src="../assets/maze.js"></script>
+<script src="../assets/deck.js"></script>
+</body>
+</html>
