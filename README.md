@@ -9,7 +9,6 @@ They work **offline**: KaTeX is bundled in `assets/katex/`, so no internet is ne
 |---|---|---|
 | 2 | Dynamic Programming | [Interactive slides](https://vernadelab.github.io/intro-rl/lecture-02-dynamic-programming/) · [PDF](lecture-02-dynamic-programming/Dynamic%20Programming.pdf) |
 | 3 | Model-Free Prediction | [Interactive slides](https://vernadelab.github.io/intro-rl/lecture-03-model-free-prediction/) |
-| 6 | Policy Gradient Methods I | [Interactive slides](https://vernadelab.github.io/intro-rl/lecture-06-policy-gradient-1/) |
 
 ```
 RL-UTN/
@@ -19,12 +18,10 @@ RL-UTN/
 │   ├── macros.js      shared LaTeX notation (\Vpi, \Qstar, \Tpi, \E, …), agreed with Chris
 │   ├── maze.js        the two-exit maze: model, DP solvers, interactive heat-map widget
 │   ├── learn.js       model-free prediction on the maze: MC, TD(0), TD(λ) widgets and charts
-│   ├── pg.js          policy gradient on the maze: occupancy measure, exact PG ascent, REINFORCE variance lab
 │   └── katex/         offline math rendering
 ├── _template/         a starter deck with every building block; copy it for a new lecture
 ├── lecture-02-dynamic-programming/
-├── lecture-03-model-free-prediction/
-└── lecture-06-policy-gradient-1/
+└── lecture-03-model-free-prediction/
 ```
 
 ## Presenting
@@ -72,11 +69,6 @@ The model and solvers are available as `RLMaze` (e.g. `RLMaze.buildModel()`), so
 - `<div class="learn-chart" …>`: RMS error vs. episodes (or vs. λ with `data-mode="lambda"`), averaged over runs, computed live in the browser.
 - `<div class="target-spread" …>`: spread of MC vs. TD targets at one state (the bias/variance picture).
 - The fixed policy is ε-greedy w.r.t. π* (`data-eps`, default 0.2). Its true value V^π is computed from the model, for comparison only.
-
-## Policy-gradient widgets (`pg.js`, Lecture 6)
-- `<div class="occupancy" data-policy="uniform" data-gamma="0.9">`: $d^\pi(s)$ as a heat map, policy switcher (uniform / → big exit / → small exit), γ slider, and a Monte Carlo estimate of $d^\pi$ from sampled episodes. Checks $\langle d^\pi, r\rangle/(1-\gamma) = V^\pi(s_1)$.
-- `<div class="pg-ascent" data-alpha="1">`: exact gradient ascent with a tabular softmax policy from θ = 0, with the learning curve $J(\theta_k)$. Uses $\partial J/\partial\theta_{s,a} = \eta(s)\pi(a|s)A(s,a)$.
-- `<div class="pg-lab" data-mode="cloud|runs" data-theta="1,0">`: two-parameter linear softmax (features "go to big exit" / "go to small exit"), drawn over the landscape $J(\theta)$. `cloud`: single-episode REINFORCE estimates and their mean squared error for three baselines. `runs`: several REINFORCE runs from $\theta_0$; with α = 0.5 and no baseline about a third of runs end at the small exit, about 1 in 12 with a baseline.
 
 ## License
 
