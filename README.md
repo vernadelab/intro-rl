@@ -9,6 +9,7 @@ They work **offline**: KaTeX is bundled in `assets/katex/`, so no internet is ne
 |---|---|---|
 | 2 | Dynamic Programming | [Interactive slides](https://vernadelab.github.io/intro-rl/lecture-02-dynamic-programming/) · [PDF](lecture-02-dynamic-programming/Dynamic%20Programming.pdf) |
 | 3 | Model-Free Prediction | [Interactive slides](https://vernadelab.github.io/intro-rl/lecture-03-model-free-prediction/) |
+| 6 | Policy Gradient Methods I | [Interactive slides](https://vernadelab.github.io/intro-rl/lecture-06-policy-gradient-1/) |
 
 ```
 RL-UTN/
@@ -18,10 +19,12 @@ RL-UTN/
 │   ├── macros.js      shared LaTeX notation (\Vpi, \Qstar, \Tpi, \E, …), agreed with Chris
 │   ├── maze.js        the two-exit maze: model, DP solvers, interactive heat-map widget
 │   ├── learn.js       model-free prediction on the maze: MC, TD(0), TD(λ) widgets and charts
+│   ├── pg.js          policy gradient widgets
 │   └── katex/         offline math rendering
 ├── _template/         a starter deck with every building block; copy it for a new lecture
 ├── lecture-02-dynamic-programming/
-└── lecture-03-model-free-prediction/
+├── lecture-03-model-free-prediction/
+└── lecture-06-policy-gradient-1/
 ```
 
 ## Presenting

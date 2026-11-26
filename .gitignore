@@ -1,5 +1,3 @@
 .DS_Store
 *.patch
 **/TODO-next-iteration.md
-assets/pg.js
-lecture-06-policy-gradient-1/

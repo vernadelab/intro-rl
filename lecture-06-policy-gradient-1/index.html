@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Policy Gradient Methods I</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/theme.css">
+<style>
+  .slide table.caus-table { font-size: 24px; }
+  .slide table.caus-table th, .slide table.caus-table td { text-align: center; padding: 8px 22px; }
+  .caus-table td.keep { color: var(--accent); font-weight: 700; background: var(--accent-bg); }
+  .caus-table td.drop { color: var(--ink-faint); background: var(--paper-warm); font-size: .8em; }
+  .deck > .slide-hidden { display: none; }
+  .pg-hl { background: #fff2a8; border-radius: 4px; padding: 0 3px; }
+  .slide table.tw-table { font-size: 21px; margin-top: 4px; }
+  .slide table.tw-table th, .slide table.tw-table td { text-align: center; padding: 6px 12px; }
+  .slide table.tw-table th:first-child { text-align: left; color: var(--ink); font-weight: 600; }
+  .slide table.tw-table td.avg { color: var(--blue); font-weight: 700; background: var(--blue-bg); }
+  .slide table.map-table { font-size: 18px; border: 0; }
+  .slide table.map-table td { border: 0; padding: 3px 6px; vertical-align: top; text-align: left; }
+  .slide table.map-table td:first-child { white-space: nowrap; }
+  .pg-sol-wrap { position: relative; }
+  .pg-sol-btn { font: 600 16px var(--font-text); padding: 5px 14px; border-radius: 8px; border: 1.5px solid var(--warm); background: #fff; color: var(--warm); cursor: pointer; }
+  .pg-sol-btn:hover { background: var(--warm-bg); }
+  .pg-sol { display: none; position: absolute; left: 0; right: 0; bottom: 0; margin: 0; z-index: 5; cursor: pointer;
+            background: #fff; border: 2px solid var(--warm); border-left: 6px solid var(--warm); box-shadow: 0 8px 24px rgba(0,0,0,.18); font-size: 22px; }
+  .pg-sol > .box-title { color: var(--warm); }
+  .pg-sol-wrap.open .pg-sol { display: block; }
+  @media print { .pg-sol-btn { display: none; } }
+  .pg-stack { font-size: 24px; }
+  .pg-stack .pg-step .katex-display { margin: 0.15em 0; text-align: left; }
+  .pg-stack .pg-step .katex-display > .katex { text-align: left; padding-left: 6px; }
+  .pg-stack .pg-note { font-size: 16px; color: var(--ink-soft); padding-left: 30px; margin: -2px 0 6px; line-height: 1.3; }
+  .pg-stack .box { margin-top: 8px; font-size: 21px; padding-top: 10px; padding-bottom: 10px; }
+</style>
+</head>
+<body data-lecture="RL · Lecture 6 · Policy Gradient Methods I" data-author="Claire Vernade">
+<main class="deck">
+
+<!-- =====================================================================
+     0 · TITLE & PLAN
+     ===================================================================== -->
+<section class="slide title-slide">
+  <h1>Policy Gradient Methods I</h1>
+  <div class="subtitle">Reinforcement Learning · Lecture 6</div>
+  <div class="author">Claire Vernade</div>
+  <div class="affil">University of Technology Nuremberg</div>
+  <div class="date">26 November 2026</div>
+</section>
+
+<section class="slide">
+  <h2>Today</h2>
+  <div class="cols c-60-40 middle">
+    <ol>
+      <li><b>The problem</b>: a parametrised policy and its value $J(\theta)$</li>
+      <li><b>Black-box search</b>: the cross-entropy method</li>
+      <li><b>The gradient, from trajectories</b>: the log-derivative trick</li>
+      <li><b>REINFORCE</b>: Monte Carlo policy gradient</li>
+      <li><b>Variance</b> and <b>causality</b></li>
+    </ol>
+    <div class="box theorem"><span class="box-title">Today's question</span>
+      Can we improve a parametrised policy $\pi_\theta$ directly, using <b>sampled trajectories only</b>?</div>
+  </div>
+  <aside class="notes">Three lectures on policy gradient. Today everything is built from whole trajectories: no value function, no Bellman equation. Next week: the state-action view (occupancy measure, PG theorem with Q), learned baselines and actor–critic.</aside>
+</section>
+
+<section class="slide section">
+  <div class="num">Part 1</div>
+  <h2>The problem</h2>
+  <p>A parametrised policy, one number to maximise, and a running example we can draw.</p>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">Recap</span>The objective, written as a function of the policy</h2>
+  <div class="cols c-60-40">
+    <div>
+      <p>Start state $S_0 \sim \rho$ (in the maze: $\rho = \delta_{s_1}$). The <b>value of a policy</b> is one number:</p>
+      <div class="eq-big">$$J(\pi) \;=\; \E_\pi\Big[\sum_{t=0}^{\infty} \gamma^t R_{t+1}\Big] \;=\; \sum_s \rho(s)\, \Vpi(s)$$</div>
+      <ul>
+        <li class="fragment">Control = $\max_\pi J(\pi)$.</li>
+        <li class="fragment">Lectures 2 to 5: get there <b>through value functions</b>: compute or learn $\Qstar$, then act greedily.</li>
+        <li class="fragment">Today: <b>parametrise</b> the policy, $\pi_\theta$, and maximise $J(\theta) := J(\pi_\theta)$ over $\theta \in \R^p$.</li>
+      </ul>
+    </div>
+    <figure><div class="maze vertical" data-policy="optimal" data-values="exact" data-arrows="policy" data-gamma="0.9" data-size="360"></div>
+      <figcaption>$\pistar$ and $\Vstar$: $J(\pistar) = \Vstar(s_1) = 5\gamma^5 \approx 2.95$</figcaption></figure>
+  </div>
+</section>
+
+<section class="slide">
+  <h2>Parametrised policies</h2>
+  <div class="cols c-60-40">
+    <div>
+      <table>
+        <tr><th>Policy</th><th>$\pi_\theta(a|s)$</th></tr>
+        <tr><td>tabular softmax</td><td>$\propto \exp(\theta_{s,a})$, $\;\theta \in \R^{|\S|\times|\A|}$</td></tr>
+        <tr><td>linear softmax</td><td>$\propto \exp(\theta^\top \phi(s,a))$</td></tr>
+        <tr><td>neural softmax</td><td>$\propto \exp(f_\theta(s)_a)$: a network with $|\A|$ outputs</td></tr>
+        <tr><td>Gaussian<br>(continuous actions)</td><td>$\mathcal{N}\big(\mu_\theta(s), \sigma^2\big)$</td></tr>
+      </table>
+      <p class="small fragment" style="margin-top:14px">Requirement: $\pi_\theta(a|s)$ is <b>differentiable</b> in $\theta$ (and positive wherever we need to explore).</p>
+    </div>
+    <figure>
+      <svg viewBox="0 0 420 330" width="420" height="330" aria-label="Same network, two readings of its outputs">
+        <rect x="20" y="120" width="70" height="90" rx="8" fill="#eaf0f6" stroke="#2b5b84"/><text x="55" y="172" font-size="22" text-anchor="middle" fill="#2b5b84">s</text>
+        <rect x="120" y="100" width="110" height="130" rx="10" fill="#f6f5f0" stroke="#4a4f47"/><text x="175" y="172" font-size="18" text-anchor="middle" fill="#4a4f47">network</text>
+        <line x1="90" y1="165" x2="120" y2="165" stroke="#4a4f47" stroke-width="2"/>
+        <g font-size="17">
+          <line x1="230" y1="130" x2="260" y2="70" stroke="#4a4f47"/><line x1="230" y1="200" x2="260" y2="260" stroke="#4a4f47"/>
+          <rect x="250" y="30" width="170" height="80" rx="8" fill="#fbefe6" stroke="#b5541c"/>
+          <text x="335" y="60" text-anchor="middle" fill="#b5541c" font-weight="700">DQN: Q_w(s,·)</text>
+          <text x="335" y="88" text-anchor="middle" fill="#1b1d1a">act: argmax</text>
+          <rect x="250" y="220" width="170" height="80" rx="8" fill="#eef3e6" stroke="#2f5a24"/>
+          <text x="335" y="250" text-anchor="middle" fill="#2f5a24" font-weight="700">PG: logits</text>
+          <text x="335" y="278" text-anchor="middle" fill="#1b1d1a">act: sample softmax</text>
+        </g>
+      </svg>
+      <figcaption>Same architecture, different meaning of the outputs</figcaption>
+    </figure>
+  </div>
+  <aside class="notes">Emphasise: for a neural softmax policy the architecture can be identical to DQN; the difference is only what the outputs mean and how they are trained.</aside>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">Running example</span>A policy with two parameters</h2>
+  <div class="cols" style="grid-template-columns: 500px 1fr; gap: 36px">
+    <div>
+      <p class="small">Two hand-made features, one per behaviour:</p>
+      <ul class="small">
+        <li>$\phi_{\text{big}}(s,a) = 1$ if $a$ is the first move of the shortest route from $s$ to the <b>big</b> exit, else $0$</li>
+        <li>$\phi_{\text{small}}(s,a) = 1$ if $a$ is the first move of the shortest route to the <b>small</b> exit, else $0$</li>
+      </ul>
+      <p class="small">A linear softmax policy on these features:</p>
+      <div style="font-size:21px">$$\pi_\theta(a|s) \;\propto\; \exp\big(\theta_{\text{big}}\,\phi_{\text{big}}(s,a) + \theta_{\text{small}}\,\phi_{\text{small}}(s,a)\big)$$</div>
+      <p class="small">Two numbers: $\theta = (\theta_{\text{big}}, \theta_{\text{small}}) \in \R^2$, the weight given to each behaviour.</p>
+    </div>
+    <div>
+      <div class="cols" style="gap:18px; grid-template-columns: 235px 235px">
+        <figure><div class="maze vertical" data-policy="big" data-values="none" data-arrows="policy" data-size="235" data-labels="ids"></div><figcaption>$\phi_{\text{big}} = 1$ on these actions</figcaption></figure>
+        <figure><div class="maze vertical" data-policy="small" data-values="none" data-arrows="policy" data-size="235" data-labels="ids"></div><figcaption>$\phi_{\text{small}} = 1$ on these actions</figcaption></figure>
+      </div>
+      <ul class="small" style="margin-top:10px">
+        <li class="fragment">$\theta = (0,0)$: all logits $0$, the <b>uniform</b> policy.</li>
+        <li class="fragment">$\theta = (5, 0)$: in $s_1$, $\pi(\rightarrow|s_1) = e^5/(e^5+3) \approx 0.98$: follows the big route. Negative weights mean "avoid".</li>
+        <li class="fragment">The two features agree only in $s_3$, $s_4$, $s_{12}$.</li>
+      </ul>
+    </div>
+  </div>
+  <aside class="notes">Why this parametrisation: (1) two parameters, so we can draw J(θ) and every update in the plane; (2) it is a genuine linear softmax policy, the score is φ(s,a) − E_π[φ(s,·)]; (3) it contains near-optimal policies (θ_big → ∞) and a local optimum (θ_small → ∞), so it shows the non-concavity of J with only two numbers; (4) the same family is used in every demo today: CEM, the REINFORCE cloud, baselines, REINFORCE runs. Shortest routes are computed by breadth-first search in the maze; ties are broken in the order ↑ → ↓ ←, which is why s1 points up (not right) for the small exit.</aside>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">Running example</span>The landscape $J(\theta)$</h2>
+  <div class="pg-lab" data-mode="landscape" data-maze="1" data-legend="1" data-theta="-1,2" data-size="340" data-maze-size="225"
+       data-caption="<b>Colour:</b> $J(\theta) = V^{\pi_\theta}(s_1)$, computed exactly from the model (Lecture 2). The agent never sees this picture.<br><b>Click</b> on the landscape to pick a $\theta$: the maze shows the policy $\pi_\theta$."
+       data-footer="<div class='box discuss' style='margin-top:12px'><span class='box-title'>Discuss with your neighbour</span>Suppose you start at $\theta_0$, somewhere in one of the basins. How would you improve your policy?</div>"></div>
+  <aside class="notes">Click a few points: bottom right (θ_big large) the arrows follow the big route, J → 5γ⁵ ≈ 2.95; top left the small route, J → γ·1 = 0.9; bottom left (both negative) the policy avoids both routes and wanders, J ≈ 0; at the origin the uniform policy, J = 0.52; at (4, 4) both behaviours equally weighted, the small exit wins (J ≈ 0.89). Two basins separated by a ridge just left of the uniform policy: exact gradient ascent from (0, 0) reaches the big exit, from (−0.25, 0) the small exit. J is not concave, even with two parameters. θ₀ = (−1, 2) is in the small-exit basin. Expected answers: try nearby θ and keep what works (CEM, next), or follow the slope (gradient, Part 3).</aside>
+</section>
+
+<section class="slide section">
+  <div class="num">Part 2</div>
+  <h2>Black-box policy search</h2>
+  <p>Before computing any gradient: try parameters, keep the good ones.</p>
+</section>
+
+<section class="slide">
+  <h2>Policy search without gradients</h2>
+  <div class="cols c-60-40">
+    <div>
+      <p>We cannot write $J(\theta)$ down, but we can <b>evaluate</b> it: run $\pi_\theta$ for $M$ trajectories and average their returns.</p>
+      <div class="eq-big">$$\hat J(\theta) = \frac{1}{M}\sum_{i=1}^M R(\tau_i), \qquad \tau_i \sim p_\theta, \qquad \E\big[\hat J(\theta)\big] = J(\theta)$$</div>
+      <ul>
+        <li class="fragment">Treat $\theta \mapsto \hat J(\theta)$ as a <b>noisy black box</b>: zero-order optimisation.</li>
+        <li class="fragment">Many options: hill climbing, finite differences, Nelder–Mead, <b>evolution strategies</b>…</li>
+        <li class="fragment">$\pi_\theta$ does not even need to be <b>differentiable</b>.</li>
+      </ul>
+    </div>
+    <div class="box discuss fragment"><span class="box-title">Discuss with your neighbour</span>
+      A trajectory contains every state, action and reward. What does $\hat J(\theta)$ keep of it?</div>
+  </div>
+  <aside class="notes">Finite differences in one line if asked: ∂J/∂θ_k ≈ (Ĵ(θ + ε u_k) − Ĵ(θ))/ε needs p + 1 noisy evaluations per gradient. Kohl &amp; Stone (2004) tuned the 12 gait parameters of an Aibo robot dog this way. Answer to the question: only one number per trajectory, R(τ).</aside>
+</section>
+
+<section class="slide">
+  <h2>The cross-entropy method (CEM)</h2>
+  <div class="cols c-60-40">
+    <div class="box algo" style="font-size:22px"><span class="box-title">CEM</span>
+      Initialise a search distribution $\mathcal{N}(\mu, \operatorname{diag}\sigma^2)$ over $\theta \in \R^p$
+      <ol>
+        <li>Sample a population $\theta_1, \dots, \theta_N \sim \mathcal{N}(\mu, \operatorname{diag}\sigma^2)$</li>
+        <li>Score each one: $\hat J(\theta_n)$ from $M$ trajectories</li>
+        <li>Keep the $k$ best: the <b>elites</b></li>
+        <li>Refit $\mu, \sigma$: mean and standard deviation of the elites, per coordinate (plus a small noise floor)</li>
+        <li>Go to 1</li>
+      </ol>
+    </div>
+    <div>
+      <ul class="small">
+        <li class="fragment">The randomness is in the <b>parameters</b>, not in the actions: each candidate $\theta_n$ is a whole policy.</li>
+        <li class="fragment">Step 4 is maximum likelihood on the elites: it minimises the cross-entropy between the elite sample and the search distribution.</li>
+        <li class="fragment">Cost: $N \times M$ trajectories per iteration.</li>
+        <li class="fragment">Classic results: Tetris (Szita &amp; Lőrincz, 2006). Refined versions: CMA-ES.</li>
+      </ul>
+    </div>
+  </div>
+  <aside class="notes">Rubinstein (1999) for the method. The noise floor keeps σ from collapsing too early (Szita &amp; Lőrincz call it "noisy CEM").</aside>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">Maze</span>CEM on the running example</h2>
+  <div class="pg-lab" data-mode="cem" data-theta="0,0" data-sigma="2" data-pop="20" data-elite="5" data-evals="5" data-size="430"
+       data-caption="The two-parameter policy from Part 1. Each <b>dot</b> is a candidate $\theta_n$; <b>yellow</b> dots are the elites. Ellipses: the search distribution at $1\sigma$ and $2\sigma$. Background: the landscape $J(\theta)$, which CEM never sees."></div>
+  <aside class="notes">Start at μ = (0, 0) (the uniform policy), σ = 2. Alternate "sample population" and "refit to elites" twice, slowly; then "iterate ×5". Over 40 seeds, this setting reaches the big exit every time after 15 iterations, using 1500 trajectories (20 candidates × 5 trajectories × 15). Point out that J is bimodal: candidates near the small-exit plateau score ≈ 0.9 and are outscored. Here, in 2D, CEM works very well. The question is how it scales with p.</aside>
+</section>
+
+<section class="slide">
+  <h2>What CEM ignores</h2>
+  <ul>
+    <li><b>One number per trajectory</b>: $R(\tau)$. Which actions were good, and when? Lost.</li>
+    <li class="fragment">The population must explore every direction of $\R^p$. Fine for $p = 2$ or $p = 12$ (a robot gait), hard for a network with $10^6$ weights.</li>
+    <li class="fragment">But: simple, parallel, robust to noise, works for non-differentiable policies. Evolution strategies remain a strong baseline (Salimans et al., 2017).</li>
+  </ul>
+  <div class="spacer"></div>
+  <div class="box discuss fragment"><span class="box-title">Discuss with your neighbour</span>
+    Other (better) ideas?</div>
+  <aside class="notes">Collect ideas. Two we follow next: perturb one coordinate at a time (finite differences), or use the actions we took (log-derivative trick). CEM increases the likelihood of the parameters that worked; policy gradient will increase the likelihood of the actions that worked.</aside>
+</section>
+
+<section class="slide section">
+  <div class="num">Part 3</div>
+  <h2>The gradient, from trajectories</h2>
+  <p>Use what CEM throws away: the actions we took.</p>
+</section>
+
+<section class="slide">
+  <h2>So, what is $\nabla_\theta J(\theta)$?</h2>
+  <div class="eq-big">$$J(\theta) = \E_{\tau \sim p_\theta}\big[R(\tau)\big] = \sum_\tau \cpol{p_\theta(\tau)}\, R(\tau), \qquad R(\tau) = \sum_{t} \gamma^t R_{t+1}$$</div>
+  <ul>
+    <li class="fragment">The return $R(\tau)$ of a <b>given</b> trajectory does not depend on $\theta$. The parameters only change <b>which trajectories we see</b>, through $p_\theta(\tau)$.</li>
+    <li class="fragment">$p_\theta(\tau) = \crew{\rho(S_0)} \prod_t \cpol{\pi_\theta(A_t|S_t)}\, \crew{P(S_{t+1}|S_t,A_t)}$: a part we know and can differentiate, and the dynamics, which we don't know.</li>
+  </ul>
+  <div class="box discuss fragment"><span class="box-title">Discuss with your neighbour</span>
+    How could we estimate $\nabla_\theta J(\theta)$ without knowing $\crew{P}$?</div>
+  <aside class="notes">Two ideas follow: perturb θ and compare returns (finite differences), or differentiate p_θ(τ) itself (log-derivative trick).</aside>
+</section>
+
+<section class="slide">
+  <h2>Idea 1: finite differences</h2>
+  <div class="cols c-60-40">
+    <div>
+      <div class="box definition"><span class="box-title">Finite-difference gradient</span>
+        For each coordinate $k = 1, \dots, p$ of $\theta$, perturb it by a small $\varepsilon$ and compare the returns:
+        $$\frac{\partial J}{\partial \theta_k}(\theta) \;\approx\; \frac{\hat J(\theta + \varepsilon\, e_k) - \hat J(\theta)}{\varepsilon},$$
+        where $e_k$ is the $k$-th unit vector and $\hat J$ is the average return of $M$ trajectories.
+      </div>
+      <ul class="small">
+        <li class="fragment"><b>Cost</b>: $p + 1$ policies to evaluate, $M$ trajectories each: $(p+1)M$ trajectories for <b>one</b> gradient step.</li>
+        <li class="fragment"><b>Noise</b>: the errors of $\hat J$ are divided by $\varepsilon$. Small $\varepsilon$: huge noise. Large $\varepsilon$: not a gradient any more.</li>
+        <li class="fragment">Works for any policy, differentiable or not.</li>
+      </ul>
+    </div>
+    <div>
+      <p class="small fragment"><b>Example</b>: Kohl &amp; Stone (2004) tuned the 12 gait parameters of an Aibo robot dog this way, timing each gait on the field.</p>
+      <div class="box discuss fragment"><span class="box-title">Idea 2</span>
+        Can we get the <b>whole</b> gradient from the trajectories of $\pi_\theta$ alone, without perturbing $\theta$?</div>
+    </div>
+  </div>
+  <aside class="notes">Same flavour as CEM: θ is evaluated as a black box, one number per trajectory. In the running example p = 2, so 3 policies per step; for a network, millions.</aside>
+</section>
+
+<section class="slide">
+  <h2>Idea 2: write the gradient as an expectation</h2>
+  <div class="cols" style="grid-template-columns: 410px 1fr; gap: 40px">
+    <div>
+      <p class="small" style="margin-bottom:6px">Simplest case first: a <b>one-step MDP</b>. In state $s$, pick $a \sim \pi_\theta(\cdot|s)$, receive $r(s,a)$, the episode ends.</p>
+      <figure>
+        <svg viewBox="0 0 400 180" width="380" height="171" aria-label="One state s with K actions a_1 to a_K, each giving a reward r(s, a_k)">
+          <defs><marker id="l6os" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0L10,5L0,10z" fill="#2f5a24"/></marker></defs>
+          <circle cx="50" cy="90" r="32" fill="#eef3e6" stroke="#2f5a24" stroke-width="2.5"/>
+          <text x="50" y="98" font-size="24" text-anchor="middle" fill="#1b1d1a" font-style="italic">s</text>
+          <g font-size="17" fill="#1b1d1a">
+            <line x1="82" y1="80" x2="250" y2="24" stroke="#2f5a24" stroke-width="2.5" marker-end="url(#l6os)"/>
+            <line x1="83" y1="88" x2="250" y2="72" stroke="#2f5a24" stroke-width="2.5" marker-end="url(#l6os)"/>
+            <line x1="82" y1="102" x2="250" y2="156" stroke="#2f5a24" stroke-width="2.5" marker-end="url(#l6os)"/>
+            <text x="120" y="42" fill="#2f5a24" font-style="italic">π(a<tspan baseline-shift="sub" font-size="12">1</tspan>|s)</text>
+            <text x="120" y="152" fill="#2f5a24" font-style="italic">π(a<tspan baseline-shift="sub" font-size="12">K</tspan>|s)</text>
+            <rect x="256" y="8" width="136" height="32" rx="6" fill="#fbefe6" stroke="#b5541c"/><text x="324" y="30" text-anchor="middle"><tspan font-style="italic">a</tspan><tspan baseline-shift="sub" font-size="12">1</tspan> → r(s, a<tspan baseline-shift="sub" font-size="12">1</tspan>)</text>
+            <rect x="256" y="56" width="136" height="32" rx="6" fill="#fbefe6" stroke="#b5541c"/><text x="324" y="78" text-anchor="middle"><tspan font-style="italic">a</tspan><tspan baseline-shift="sub" font-size="12">2</tspan> → r(s, a<tspan baseline-shift="sub" font-size="12">2</tspan>)</text>
+            <text x="324" y="116" text-anchor="middle" font-size="22" fill="#8a9086">⋮</text>
+            <rect x="256" y="140" width="136" height="32" rx="6" fill="#fbefe6" stroke="#b5541c"/><text x="324" y="162" text-anchor="middle"><tspan font-style="italic">a</tspan><tspan baseline-shift="sub" font-size="12">K</tspan> → r(s, a<tspan baseline-shift="sub" font-size="12">K</tspan>)</text>
+          </g>
+        </svg>
+        <figcaption>One state, $K$ actions, one reward each</figcaption>
+      </figure>
+      <div class="box definition fragment small" data-frag="3" style="margin-top:6px"><span class="box-title">Tool: log-derivative trick</span>
+        $\nabla_\theta \pi_\theta = \pi_\theta\, \nabla_\theta \log \pi_\theta$, since $\nabla \log \pi = \nabla \pi / \pi$.<br>
+        $\nabla_\theta \log \pi_\theta(a|s)$: the <b>score function</b>.
+      </div>
+    </div>
+    <div class="pg-stack">
+      <div class="pg-step">
+        <div>$$J(\theta) = \E_{a\sim\pi_\theta(\cdot|s)}\big[r(s,a)\big] = \sum_a \pi_\theta(a|s)\, r(s,a)$$</div>
+        <div class="pg-note">the objective, written as a sum over actions</div>
+      </div>
+      <div class="pg-step fragment" data-frag="1">
+        <div>$$\nabla_\theta J(\theta) = \sum_a \htmlClass{pg-hl}{\nabla_\theta \pi_\theta(a|s)}\; r(s,a)$$</div>
+        <div class="pg-note">$r$ does not depend on $\theta$. Problem: this needs $r(s,a)$ for <b>every</b> action, and $\nabla\pi$ is not a probability.</div>
+      </div>
+      <div class="pg-step fragment" data-frag="3">
+        <div>$$\textcolor{#8a9086}{\nabla_\theta J(\theta)} = \sum_a \htmlClass{pg-hl}{\pi_\theta(a|s)\, \nabla_\theta \log \pi_\theta(a|s)}\; r(s,a)$$</div>
+        <div class="pg-note">log-derivative trick (left)</div>
+      </div>
+      <div class="pg-step fragment" data-frag="4">
+        <div>$$\textcolor{#8a9086}{\nabla_\theta J(\theta)} = \htmlClass{pg-hl}{\E_{a\sim\pi_\theta(\cdot|s)}\big[}\, \nabla_\theta \log \pi_\theta(a|s)\; r(s,a)\, \htmlClass{pg-hl}{\big]}$$</div>
+        <div class="pg-note">a sum weighted by $\pi_\theta(a|s)$ is an expectation under $\pi_\theta$</div>
+      </div>
+      <div class="box theorem fragment" data-frag="5"><span class="box-title">The gradient is an expectation</span>
+        Sample $a \sim \pi_\theta(\cdot|s)$, observe $r$: $\;\hat g = r\, \nabla_\theta \log \pi_\theta(a|s)$ is an <b>unbiased estimate</b> of $\nabla_\theta J(\theta)$, from the action we <b>took</b> only.
+      </div>
+    </div>
+  </div>
+  <aside class="notes">Same structure as Georg's slide. Two separate messages: the log-derivative trick is only a tool (left box); the point is the last line: the gradient is an expectation under our own policy, so we can estimate it by sampling. Line 2 is the problem: a sum over all actions with weights ∇π that are not probabilities. Lines 3–4 turn it into an average over actions drawn from π_θ. Intuition: ĝ pushes up the log-probability of the action we took, in proportion to its reward. Next slide: the same steps for whole trajectories.</aside>
+</section>
+
+<section class="slide">
+  <h2>Whole trajectories: the dynamics cancel</h2>
+  <div class="box definition" style="position:absolute; top:26px; right:72px; width:262px; margin:0; padding:8px 14px; font-size:19px; line-height:1.3">
+    <span class="box-title" style="font-size:13px; margin-bottom:2px">Recall</span>
+    $J(\theta) = \textstyle\sum_\tau p_\theta(\tau)\, R(\tau)$<br>
+    <span style="font-size:14px; color:var(--ink-soft)">probability of $\tau$ × its return</span>
+  </div>
+  <div class="cols" style="grid-template-columns: 410px 1fr; gap: 40px">
+    <div>
+      <p class="small" style="margin-bottom:2px">Same steps, with a <b>whole trajectory</b> $\tau$ instead of one action, and $p_\theta(\tau)$ instead of $\pi_\theta(a|s)$:</p>
+      <figure>
+          <svg viewBox="0 0 420 300" width="410" height="293" aria-label="Many possible trajectories from S_0 through grey states; one highlighted trajectory shows S_0 sampled from rho, an action A_t sampled from pi_theta at a state S_t, and the transition P to S_t+1; each trajectory ends with its return R(tau)">
+          <defs><marker id="l6ta" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="#2f5a24"/></marker><marker id="l6tp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="#b5541c"/></marker></defs>
+          <circle cx="150" cy="190" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+          <circle cx="128" cy="250" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+          <circle cx="196" cy="215" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+          <circle cx="220" cy="150" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+          <circle cx="250" cy="250" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+          <circle cx="98" cy="200" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+          <circle cx="240" cy="110" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+          <circle cx="160" cy="140" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+          <circle cx="214" cy="270" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+          <circle cx="262" cy="190" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+          <circle cx="120" cy="170" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+
+          <circle cx="70" cy="240" r="8" fill="#e7e7df" stroke="#c9c9bf"/>
+          <path d="M46,150 Q66,181 98,200 Q126,204 150,190 Q189,178 220,150 Q235,177 262,190 L282,108" fill="none" stroke="#2f5a24" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" opacity=".45"/>
+          <path d="M46,150 Q81,169 120,170 Q145,162 160,140 Q203,133 240,110 L282,160" fill="none" stroke="#2f5a24" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" opacity=".45"/>
+          <path d="M46,150 Q80,206 128,250 Q166,241 196,215 Q218,240 250,250 L282,212" fill="none" stroke="#2f5a24" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity=".45"/>
+          <path d="M46,150 Q66,181 98,200 Q126,204 150,190 Q175,236 214,270 L282,264" fill="none" stroke="#2f5a24" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round" opacity=".45"/>
+          <path d="M46,150 Q77,138 98,112" fill="none" stroke="#2f5a24" stroke-width="4.5" stroke-linecap="round"/>
+          <path d="M108,107 Q133.0,96 157,94" fill="none" stroke="#2f5a24" stroke-width="4.5" stroke-dasharray="1 8" stroke-linecap="round"/>
+          <path d="M179,92 L219,76" fill="none" stroke="#b5541c" stroke-width="3" stroke-dasharray="7 4" marker-end="url(#l6tp)"/>
+          <path d="M243,68 Q262,42 282,40" fill="none" stroke="#2f5a24" stroke-width="4.5" stroke-linecap="round"/>
+          <circle cx="98" cy="112" r="11" fill="#fff" stroke="#1b1d1a" stroke-width="2"/>
+          <circle cx="168" cy="96" r="11" fill="#fff" stroke="#1b1d1a" stroke-width="2"/>
+          <circle cx="232" cy="72" r="11" fill="#fff" stroke="#1b1d1a" stroke-width="2"/>
+          <text x="94" y="142" font-size="17" text-anchor="middle" fill="#1b1d1a" font-style="italic">S<tspan baseline-shift="sub" font-size="11">1</tspan></text>
+          <text x="168" y="127" font-size="17" text-anchor="middle" fill="#1b1d1a" font-style="italic">S<tspan baseline-shift="sub" font-size="11">t</tspan></text>
+          <text x="240" y="52" font-size="17" text-anchor="middle" fill="#1b1d1a" font-style="italic">S<tspan baseline-shift="sub" font-size="11">t+1</tspan></text>
+          <line x1="162" y1="86" x2="148" y2="62" stroke="#2f5a24" stroke-width="2.5" marker-end="url(#l6ta)"/>
+          <text x="84" y="52" font-size="16" fill="#2f5a24" font-style="italic">A<tspan baseline-shift="sub" font-size="11">t</tspan> ∼ π<tspan baseline-shift="sub" font-size="11">θ</tspan>(·|S<tspan baseline-shift="sub" font-size="11">t</tspan>)</text>
+          <text x="204" y="104" font-size="17" fill="#b5541c" font-style="italic">P</text>
+          <circle cx="46" cy="150" r="22" fill="#eef3e6" stroke="#2f5a24" stroke-width="2.5"/>
+          <text x="46" y="157" font-size="19" text-anchor="middle" fill="#1b1d1a" font-style="italic">S<tspan baseline-shift="sub" font-size="11">0</tspan></text>
+          <text x="42" y="118" font-size="17" text-anchor="middle" fill="#b5541c" font-style="italic">S<tspan baseline-shift="sub" font-size="11">0</tspan> ∼ ρ</text>
+          <rect x="284" y="26" width="130" height="28" rx="6" fill="#f3d97a" stroke="#5b4300" stroke-width="2.2"/><text x="349" y="46" font-size="15" text-anchor="middle" fill="#5b4300" font-weight="700">R(τ) = 2.95</text>
+          <rect x="284" y="94" width="130" height="28" rx="6" fill="#f6c9a7" stroke="#7a3410" stroke-width="1.2"/><text x="349" y="114" font-size="15" text-anchor="middle" fill="#7a3410" font-weight="400">R(τ) = 0.90</text>
+          <rect x="284" y="146" width="130" height="28" rx="6" fill="#f3d97a" stroke="#5b4300" stroke-width="1.2"/><text x="349" y="166" font-size="15" text-anchor="middle" fill="#5b4300" font-weight="400">R(τ) = 2.39</text>
+          <rect x="284" y="198" width="130" height="28" rx="6" fill="#f6c9a7" stroke="#7a3410" stroke-width="1.2"/><text x="349" y="218" font-size="15" text-anchor="middle" fill="#7a3410" font-weight="400">R(τ) = 0.73</text>
+          <rect x="284" y="250" width="130" height="28" rx="6" fill="#fbfaf6" stroke="#8a9086" stroke-width="1.2"/><text x="349" y="270" font-size="15" text-anchor="middle" fill="#8a9086" font-weight="400">R(τ) = 0.00</text>
+          <text x="349" y="297" font-size="14" text-anchor="middle" fill="#4a4f47">line width ∝ p<tspan baseline-shift="sub" font-size="10">θ</tspan>(τ)</text>
+          </svg>
+        <figcaption>$\sum_\tau$ runs over <b>all possible</b> trajectories</figcaption>
+      </figure>
+    </div>
+    <div class="pg-stack">
+      <div class="pg-step">
+        <div>$$\nabla_\theta J(\theta) = \sum_\tau \nabla_\theta p_\theta(\tau)\, R(\tau) = \E_{\tau\sim p_\theta}\big[R(\tau)\, \htmlClass{pg-hl}{\nabla_\theta \log p_\theta(\tau)}\big]$$</div>
+        <div class="pg-note">same steps as for one action: log-derivative trick, then a weighted sum is an expectation</div>
+      </div>
+      <div class="pg-step fragment">
+        <div style="font-size:22px">$$\log p_\theta(\tau) = \log \crew{\rho(S_0)} + \sum_t \log \cpol{\pi_\theta(A_t|S_t)} + \sum_t \log \crew{P(S_{t+1}|S_t,A_t)}$$</div>
+        <div class="pg-note">$p_\theta(\tau)$ is a product of probabilities, so its log is a sum</div>
+      </div>
+      <div class="pg-step fragment">
+        <div>$$\htmlClass{pg-hl}{\nabla_\theta \log p_\theta(\tau)} = \sum_t \nabla_\theta \log \cpol{\pi_\theta(A_t|S_t)}$$</div>
+        <div class="pg-note">$\crew{\rho}$ and $\crew{P}$ do not depend on $\theta$: their gradients are $0$</div>
+      </div>
+      <div class="box theorem fragment"><span class="box-title">Policy gradient (Williams, 1992)</span>
+        $$\nabla_\theta J(\theta) = \E_{\tau \sim p_\theta}\Big[\, R(\tau) \sum_{t \ge 0} \nabla_\theta \log \pi_\theta(A_t|S_t) \Big]$$
+        <span class="small"><b>No $\crew{P}$</b>: only the scores of the actions we took, and the return. "<b>Reinforce</b>" what worked.</span>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">Σ_τ is over all possible trajectories, not over sampled ones and not over time steps: it is the trajectory analogue of Σ_a on the previous slide. Sampled trajectories τ_1, …, τ_N only appear when we estimate the expectation (REINFORCE). The returns in the drawing are real values from the maze with γ = 0.9: big exit after 6 steps 2.95, after 8 steps 2.39, after 10 steps 1.94; small exit after 2 steps 0.90, after 4 steps 0.73. Technicalities (exchanging ∇ and the infinite sum) are fine for finite MDPs, bounded rewards and smooth policies. With one step this is exactly the previous slide.</aside>
+</section>
+
+<section class="slide">
+  <h2>Computing the score $\nabla_\theta \log \pi_\theta(a|s)$</h2>
+  <table>
+    <tr><th>Policy</th><th>$\nabla_\theta \log \pi_\theta(a|s)$</th></tr>
+    <tr><td>tabular softmax</td><td>$\dfrac{\partial \log \pi_\theta(a|s)}{\partial \theta_{s',b}} = \mathbb{1}\{s'=s\}\big(\mathbb{1}\{b=a\} - \pi_\theta(b|s)\big)$</td></tr>
+    <tr class="fragment"><td>linear softmax</td><td>$\phi(s,a) - \E_{b\sim\pi_\theta(\cdot|s)}\big[\phi(s,b)\big]$</td></tr>
+    <tr class="fragment"><td>Gaussian, fixed $\sigma$</td><td>$\dfrac{a - \mu_\theta(s)}{\sigma^2}\, \nabla_\theta \mu_\theta(s)$</td></tr>
+    <tr class="fragment"><td>neural network</td><td>backprop through $\log \pi_\theta(a|s)$: <code>loss = -logp(a|s) * weight</code></td></tr>
+  </table>
+  <div class="fragment pg-sol-wrap" style="margin-top:18px">
+    <div class="box practice" style="margin:0"><span class="box-title">Let's practice</span>
+      Derive the linear-softmax line from $\log \pi_\theta(a|s) = \theta^\top\phi(s,a) - \log \sum_b e^{\theta^\top \phi(s,b)}$. Check that the score has mean zero: $\E_{a \sim \pi_\theta(\cdot|s)}\big[\nabla_\theta \log \pi_\theta(a|s)\big] = 0$.
+      <div style="text-align:right; margin-top:6px"><button class="pg-sol-btn" onclick="event.stopPropagation(); this.closest('.pg-sol-wrap').classList.add('open')">Solution</button></div>
+    </div>
+    <div class="box pg-sol" onclick="event.stopPropagation(); this.closest('.pg-sol-wrap').classList.remove('open')" title="click to hide"><span class="box-title">Solution <span style="font-weight:400; letter-spacing:0; text-transform:none; float:right; color:var(--ink-faint)">click to hide</span></span>
+      $$\begin{aligned}
+      \nabla_\theta \log \pi_\theta(a|s) &= \phi(s,a) - \frac{\nabla_\theta \sum_b e^{\theta^\top\phi(s,b)}}{\sum_{b'} e^{\theta^\top\phi(s,b')}}
+      = \phi(s,a) - \sum_b \underbrace{\frac{e^{\theta^\top\phi(s,b)}}{\sum_{b'} e^{\theta^\top\phi(s,b')}}}_{=\,\pi_\theta(b|s)} \phi(s,b) \\
+      &= \phi(s,a) - \E_{b\sim\pi_\theta(\cdot|s)}\big[\phi(s,b)\big]
+      \end{aligned}$$
+      Mean zero: $\;\E_{a\sim\pi_\theta}\big[\phi(s,a)\big] - \E_{b\sim\pi_\theta}\big[\phi(s,b)\big] = 0$. In general: $\sum_a \pi_\theta \nabla_\theta \log \pi_\theta = \sum_a \nabla_\theta \pi_\theta(a|s) = \nabla_\theta 1 = 0$.
+    </div>
+  </div>
+  <aside class="notes">Mean zero: Σ_a π ∇log π = Σ_a ∇π = ∇ 1 = 0. Keep this in mind: it is the reason baselines work.</aside>
+</section>
+
+<section class="slide section">
+  <div class="num">Part 4</div>
+  <h2>REINFORCE</h2>
+  <p>Monte Carlo policy gradient.</p>
+</section>
+
+<section class="slide">
+  <h2>From an expectation to a sample</h2>
+  <p style="margin-bottom:4px">The gradient is an expectation over trajectories of $\pi_\theta$, so we can estimate it with <b>one specific trajectory</b>. Run $\pi_\theta$ once and record:</p>
+  <div>$$\tilde\tau = \big(S_0, A_0, R_1,\; S_1, A_1, R_2,\; \dots,\; S_{T-1}, A_{T-1}, R_T\big) \sim p_\theta$$</div>
+  <div>$$\hat g(\tilde\tau) = R(\tilde\tau) \sum_{t=0}^{T-1} \nabla_\theta \log \pi_\theta(A_t|S_t), \qquad \E_{\tilde\tau\sim p_\theta}\big[\hat g(\tilde\tau)\big] = \nabla_\theta J(\theta)$$</div>
+  <p class="small">$S_t, A_t$: the states and actions of $\tilde\tau$. $\;R(\tilde\tau) = \sum_t \gamma^t R_{t+1}$: its return, one number.</p>
+  <ul class="small">
+    <li class="fragment">No model, no value function, no Bellman equation.</li>
+    <li class="fragment">Averaging over $N$ trajectories divides the variance by $N$, and costs $N$ times more interaction.</li>
+  </ul>
+  <div class="box theorem fragment small"><span class="box-title">Compare with CEM</span>
+    CEM reinforced the <b>parameters</b> that worked; $\hat g$ reinforces the <b>actions</b> that worked.</div>
+</section>
+
+<section class="slide">
+  <h2>REINFORCE (Williams, 1992)</h2>
+  <div class="cols c-60-40">
+    <div class="box algo"><span class="box-title">REINFORCE, first version</span>
+      <ol>
+        <li>Initialise $\theta$ (e.g. uniform policy)</li>
+        <li>Repeat:
+          <ol>
+            <li>Run $\pi_\theta$: $\;S_0, A_0, R_1, \dots, S_{T-1}, A_{T-1}, R_T$</li>
+            <li>$R(\tau) = \sum_{t} \gamma^t R_{t+1}$</li>
+            <li>$\theta \leftarrow \theta + \alpha\, R(\tau) \sum_{t} \nabla_\theta \log \pi_\theta(A_t|S_t)$</li>
+          </ol>
+        </li>
+      </ol>
+    </div>
+    <div>
+      <ul class="small">
+        <li><b>Model-free</b>, <b>on-policy</b>: the trajectory must come from the current $\pi_\theta$. Old trajectories cannot be reused as is.</li>
+        <li class="fragment">In code: <code>loss = -R * sum(logp)</code>, then let autodiff do the rest.</li>
+        <li class="fragment">Stochastic gradient ascent: decreasing $\alpha$, or mini-batches of trajectories.</li>
+        <li class="fragment">Part 5: how noisy is this in practice, and a first fix: <b>causality</b>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- HIDDEN (done in the exercise session). To show it: change class="slide-hidden" back to class="slide". -->
+<section class="slide-hidden practice-slide">
+  <h2>Let's practice: one REINFORCE update by hand</h2>
+  <div class="cols c-60-40">
+    <div>
+      <p class="small">Tabular softmax, $\theta = 0$ (uniform), $\gamma = 0.9$, $\alpha = 1$. One trajectory:</p>
+      <p>$$s_1 \xrightarrow{\;\rightarrow\;} s_2 \xrightarrow{\;\uparrow\;} \text{small exit } (+1)$$</p>
+      <ol class="small">
+        <li>Compute $R(\tau)$.</li>
+        <li>Write the score $\nabla_{\theta_{s,\cdot}} \log \pi_\theta(a|s)$ at $\theta = 0$.</li>
+        <li>Which entries of $\theta$ change, and by how much?</li>
+        <li>New value of $\pi_\theta(\rightarrow|s_1)$?</li>
+      </ol>
+      <div class="box fragment small"><span class="box-title">Solution</span>
+        $R(\tau) = 0 + \gamma \cdot 1 = 0.9$. Score $= e_a - \tfrac14\mathbf{1}$. Both steps get weight $R(\tau) = 0.9$, so
+        $\theta_{s_1,\rightarrow} = \theta_{s_2,\uparrow} = 0.675$, and the 3 other entries of rows $s_1$, $s_2$ are $-0.225$. Then $\pi(\rightarrow|s_1) = \frac{e^{0.675}}{e^{0.675} + 3e^{-0.225}} \approx 0.45$.</div>
+    </div>
+    <figure><div class="maze vertical" data-values="none" data-paths="1 2 g" data-size="300" data-labels="ids"></div></figure>
+  </div>
+  <aside class="notes">Discussion: the trajectory went to the small exit, yet we increased π(→|s1), which is also the first move of the big-exit route. With r ≥ 0, every sampled action gets pushed up; only the relative sizes of the pushes carry information. This motivates baselines.</aside>
+</section>
+
+<section class="slide section">
+  <div class="num">Part 5</div>
+  <h2>Variance and causality</h2>
+  <p>Unbiased is not enough.</p>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">Maze</span>REINFORCE in action</h2>
+  <div class="pg-lab" data-mode="live" data-kinds="full" data-theta="0.5,-0.5" data-alpha="0.5" data-steps="150" data-seed="13" data-size="370" data-maze-size="210"></div>
+  <aside class="notes">One update = one trajectory (shown on the maze, from s1) and one step θ ← θ + α R(τ) Σ ∇log π. Left: the REINFORCE path (orange) against exact gradient ascent with the same α (dashed). The black arrow is where the exact gradient would have sent us from the previous θ. Press "1 update" a few times first: the orange steps often point somewhere else than the black arrow, and a trajectory that ends at the small exit (R = 0.9) pushes θ towards the small-exit behaviour. Then "play". With the default seed (13) REINFORCE ends at the small exit (J ≈ 0.9) while exact ascent reaches 2.94. "new seed": the next seed succeeds, with a very bumpy curve. Over 100 seeds at α = 0.5: 35% of the runs end at the small exit after 150 trajectories.</aside>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">Maze</span>What does one trajectory tell us?</h2>
+  <div class="pg-lab" data-mode="cloud" data-kinds="full" data-theta="0,0" data-alpha="2" data-size="430" data-estimators="0" data-compare="0" data-convergence="1"
+       data-caption="Each <b>dot</b> is the next parameter $\theta + \alpha\, \hat g(\tau)$ after one REINFORCE step computed from a <b>single trajectory</b> $\tau$. The <b>black arrow</b> is the exact step $\theta + \alpha \nabla J(\theta)$."></div>
+  <aside class="notes">REINFORCE estimator, no baseline yet. Click "sample 1" a few times, then "sample 20": We start at θ = 0, the uniform policy, where training would start. The cloud is huge and many single-trajectory steps go the wrong way; a single estimate is barely aligned with the true gradient (average cos ≈ 0). The mean (ring) is right: unbiased but very noisy. Then "sample 200" a couple of times and read the curve: at θ = 0 the running average needs about 140 trajectories (median over seeds; 90% of seeds: under ~370) before it stays above cos = 0.9, i.e. within 25° of ∇J. Elsewhere, e.g. θ = (1, 0), where the gradient is larger, it takes ~15. Message: one trajectory is not a gradient. Move θ by clicking. Baselines come in a few slides.</aside>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">Maze</span>Variance matters: REINFORCE runs</h2>
+  <div class="pg-lab" data-mode="runs" data-theta="0.5,-0.5" data-alpha="0.5" data-size="430" data-kinds="full"></div>
+  <aside class="notes">From θ0 = (0.5, −0.5) the exact gradient leads to the big exit (dashed). "run ×10" a few times, 1 trajectory per update, α = 0.5. Over 100 seeds about 35% of the runs end at the small exit (orange dots). With 10 trajectories per update the noise drops, but each update costs 10× more trajectories. Noise does not only slow things down: on a non-concave objective it changes where you end up.</aside>
+</section>
+
+<section class="slide">
+  <h2>Why is $\hat g$ so noisy?</h2>
+  <div class="cols c-40-60">
+    <ul class="small">
+      <li>One trajectory = <b>one sample</b> of a random vector.</li>
+      <li class="fragment">$R(\tau)$ carries the randomness of <b>every</b> action and transition of the trajectory.</li>
+      <li class="fragment">$\hat g$ sums $T$ score terms: the noise grows with the <b>horizon</b>.</li>
+      <li class="fragment">All returns are $\ge 0$ here: <b>every</b> action taken is reinforced, even in a bad trajectory. The signal is only in the <b>differences</b> between pushes.</li>
+    </ul>
+    <div class="box discuss fragment"><span class="box-title">One free lunch</span>
+      <b>The score has mean zero</b> in every state:
+      $$\E_{a\sim\pi_\theta(\cdot|s)}\big[\nabla_\theta \log \pi_\theta(a|s)\big] = \sum_a \nabla_\theta \pi_\theta(a|s) = \nabla_\theta 1 = 0.$$
+      So any term of $\hat g$ that multiplies a score by something the action <b>cannot influence</b> has mean zero: we can drop it without bias.
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">A tool</span>Averaging in two stages</h2>
+  <div class="cols" style="grid-template-columns: 420px minmax(0,1fr); gap: 36px">
+    <div>
+      <p class="small" style="margin-bottom:6px">A game: flip a coin. <b>Heads</b>: roll a die and win the number shown. <b>Tails</b>: win 1&nbsp;€. What do you win on average?</p>
+      <figure>
+        <svg viewBox="0 0 420 250" width="410" height="244" aria-label="Probability tree: a coin, heads with probability one half leads to a die roll worth 1 to 6, tails with probability one half wins 1 euro">
+          <circle cx="44" cy="125" r="30" fill="#eef3e6" stroke="#2f5a24" stroke-width="2.5"/><text x="44" y="131" font-size="17" text-anchor="middle" fill="#1b1d1a">coin</text>
+          <line x1="72" y1="114" x2="178" y2="62" stroke="#2f5a24" stroke-width="2.5"/><line x1="72" y1="136" x2="178" y2="190" stroke="#2f5a24" stroke-width="2.5"/>
+          <text x="112" y="76" font-size="17" fill="#2f5a24">½ heads</text><text x="112" y="190" font-size="17" fill="#2f5a24">½ tails</text>
+          <rect x="182" y="22" width="226" height="80" rx="8" fill="#f6f5f0" stroke="#8a9086"/>
+          <text x="295" y="46" font-size="16" text-anchor="middle" fill="#1b1d1a">roll a die, win</text>
+          <text x="295" y="72" font-size="19" text-anchor="middle" fill="#1b1d1a">1, 2, 3, 4, 5 or 6 €</text>
+          <text x="295" y="94" font-size="14" text-anchor="middle" fill="#4a4f47">each with probability 1/6</text>
+          <rect x="182" y="166" width="226" height="50" rx="8" fill="#f6f5f0" stroke="#8a9086"/>
+          <text x="295" y="197" font-size="19" text-anchor="middle" fill="#1b1d1a">win 1 €</text>
+          <text x="295" y="128" font-size="16" text-anchor="middle" fill="#2b5b84" font-weight="700">average: 3.5 €</text>
+          <text x="295" y="240" font-size="16" text-anchor="middle" fill="#2b5b84" font-weight="700">average: 1 €</text>
+        </svg>
+      </figure>
+    </div>
+    <div>
+      <div class="fragment">
+        <p class="small" style="margin:0"><b>Directly</b>, over all 7 outcomes:</p>
+        <div style="font-size:22px">$$\E[W] = \tfrac12\cdot\tfrac16\,(1+\dots+6) + \tfrac12 \cdot 1 = 2.25\text{ €}$$</div>
+      </div>
+      <div class="fragment">
+        <p class="small" style="margin:0"><b>In two stages</b>: average what happens <b>after</b> the coin, for each side; then average over the coin:</p>
+        <div style="font-size:22px">$$\E[W] = \tfrac12\cdot \htmlClass{pg-hl}{3.5} + \tfrac12 \cdot \htmlClass{pg-hl}{1} = 2.25\text{ €}$$</div>
+      </div>
+      <div class="box theorem fragment"><span class="box-title">Tower rule</span>
+        $$\E[X] = \E\big[\, \E[X \mid Y] \,\big]$$
+        <span class="small">$\E[X \mid Y]$: the average of $X$ once $Y$ is known. Here $Y$ = the coin and $\E[W \mid \text{heads}] = 3.5$.</span>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">Let them compute the first line themselves (2.25). The point of the two-stage computation: we can first fix what happened early (the coin), average over what happens later, and only then average over the early part. This is the only probability tool needed for causality. Formally E[X | Y] is a random variable, a function of Y; no need to say more.</aside>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">A tool</span>Something fixed before, times a fair coin</h2>
+  <div class="cols" style="grid-template-columns: 1.05fr 1fr; gap: 36px">
+    <div>
+      <p class="small">First the weather $Y$ is decided, and it sets your stake $f(Y)$. <b>Then</b> a fair coin $Z = \pm 1$ decides if you win or lose it. You win $f(Y)\cdot Z$.</p>
+      <table class="tw-table">
+        <tr><th></th><th>$Z = +1$ <span class="tiny">(½)</span></th><th>$Z = -1$ <span class="tiny">(½)</span></th><th>average</th></tr>
+        <tr><th>sunny <span class="tiny">(¾)</span>: stake 10&nbsp;€</th><td>$+10$</td><td>$-10$</td><td class="avg">$0$</td></tr>
+        <tr><th>rainy <span class="tiny">(¼)</span>: stake 2&nbsp;€</th><td>$+2$</td><td>$-2$</td><td class="avg">$0$</td></tr>
+      </table>
+      <div class="fragment" style="margin-top:0; font-size:22px">
+        $$\E\big[f(Y)\, Z\big] = \E\Big[\, f(Y)\, \underbrace{\E[Z \mid Y]}_{=\,0 \text{ (fair coin)}} \Big] = 0$$
+      </div>
+    </div>
+    <div>
+      <ul class="small">
+        <li class="fragment">Every row averages to $0$: the game is worth <b>nothing</b> on average, whatever the stakes and the weather probabilities.</li>
+        <li class="fragment">But one game gives $\pm 10$ or $\pm 2$: <b>pure noise</b>. Adding it to anything only makes it noisier.</li>
+      </ul>
+      <div class="box definition fragment small"><span class="box-title">In REINFORCE</span>
+        <table class="map-table">
+          <tr><td>weather $Y$</td><td>→</td><td>the history before $A_t$: $\;\mathcal{H}_t = (S_0, A_0, R_1, \dots, S_t)$</td></tr>
+          <tr><td>stake $f(Y)$</td><td>→</td><td>a reward from the <b>past</b>, $R_{k+1}$ with $k \lt t$</td></tr>
+          <tr><td>fair coin $Z$</td><td>→</td><td>the score $\nabla_\theta \log \pi_\theta(A_t|S_t)$: mean zero once $S_t$ is known</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">The table is the whole argument: condition on the row (what was decided first), average over the columns (what comes after, with mean zero), get 0 in every row. The score plays the fair coin: given the state, Σ_a π(a|s) ∇log π(a|s) = 0 (slide "Why is ĝ so noisy?", and the score exercise). Unlike a real coin it is a vector and not ±1, but its average given S_t is 0, which is all we use.</aside>
+</section>
+
+<section class="slide">
+  <h2>Causality (1/2): an action cannot change the past</h2>
+  <p class="small" style="margin-bottom:2px">$\mathcal{H}_t = (S_0, A_0, R_1, \dots, S_t)$: the history before $A_t$. For $k \lt t$, $R_{k+1}$ is part of $\mathcal{H}_t$ (a "stake"), so by the tower rule:</p>
+  <div class="box definition" style="padding:4px 18px; margin:4px 0 10px">
+    <div style="font-size:23px">$$\E\big[R_{k+1}\, \nabla_\theta \log \pi_\theta(A_t|S_t)\big] = \E\Big[R_{k+1}\, \underbrace{\E\big[\nabla_\theta \log \pi_\theta(A_t|S_t) \,\big|\, \mathcal{H}_t\big]}_{=\,0 \text{ (score has mean zero)}}\Big] = 0 \qquad \text{for } k \lt t \qquad (\star)$$</div>
+  </div>
+  <div class="pg-stack" style="font-size:23px">
+    <div class="pg-step fragment">
+      <div>$$\nabla_\theta J(\theta) = \E\Big[\sum_{t} \nabla_\theta \log \pi_\theta(A_t|S_t)\; \sum_{k} \gamma^k R_{k+1}\Big]
+      = \sum_t \sum_k \gamma^k\, \E\big[R_{k+1}\, \nabla_\theta \log \pi_\theta(A_t|S_t)\big]$$</div>
+      <div class="pg-note">the trajectory form, expanded: one term per pair (score at time $t$, reward at time $k+1$)</div>
+    </div>
+    <div class="pg-step fragment">
+      <div>$$\textcolor{#8a9086}{\nabla_\theta J(\theta)} = \sum_t \Big( \htmlClass{pg-hl}{\sum_{k \lt t} \gamma^k\, \E\big[R_{k+1}\, \nabla_\theta \log \pi_\theta(A_t|S_t)\big]} + \sum_{k \ge t} \gamma^k\, \E\big[R_{k+1}\, \nabla_\theta \log \pi_\theta(A_t|S_t)\big] \Big)$$</div>
+      <div class="pg-note">split each sum: rewards <b>before</b> $A_t$ ($k \lt t$), and rewards <b>from</b> $A_t$ on ($k \ge t$). The highlighted terms are $0$ by $(\star)$</div>
+    </div>
+    <div class="pg-step fragment">
+      <div>$$\textcolor{#8a9086}{\nabla_\theta J(\theta)} = \E\Big[\sum_t \nabla_\theta \log \pi_\theta(A_t|S_t)\, \htmlClass{pg-hl}{\sum_{k \ge t} \gamma^k R_{k+1}}\Big]
+      = \E\Big[\sum_t \gamma^t\, G_t\; \nabla_\theta \log \pi_\theta(A_t|S_t)\Big]$$</div>
+      <div class="pg-note">put the sum back inside the expectation, and factor $\gamma^t$: $\;\sum_{k\ge t}\gamma^k R_{k+1} = \gamma^t \sum_{k \ge t} \gamma^{k-t} R_{k+1} = \gamma^t G_t$, the <b>reward-to-go</b></div>
+    </div>
+  </div>
+  <p class="fragment small" style="margin-top:2px"><b>REINFORCE as it is usually written</b>: each score weighted only by the rewards <b>after</b> its action.</p>
+  <aside class="notes">Most implementations also drop the γ^t in front of G_t. That is no longer the gradient of J (Nota &amp; Thomas, 2020), but it often works well in practice.</aside>
+</section>
+
+<section class="slide">
+  <h2>Causality (2/2): which terms survive?</h2>
+  <div class="cols c-60-40">
+    <div>
+      <p class="small" style="margin-bottom:6px">Three steps, scores $\psi_t = \nabla_\theta \log \pi_\theta(A_t|S_t)$. The full-return estimator $R(\tau)\,(\psi_0 + \psi_1 + \psi_2)$ has nine terms:</p>
+      <table class="caus-table" style="font-size:20px">
+        <tr><th></th><th>$R_1$</th><th>$\gamma R_2$</th><th>$\gamma^2 R_3$</th></tr>
+        <tr><th>$\psi_0$</th><td class="keep">✓</td><td class="keep">✓</td><td class="keep">✓</td></tr>
+        <tr><th>$\psi_1$</th><td class="drop">mean $0$</td><td class="keep">✓</td><td class="keep">✓</td></tr>
+        <tr><th>$\psi_2$</th><td class="drop">mean $0$</td><td class="drop">mean $0$</td><td class="keep">✓</td></tr>
+      </table>
+      <p class="small fragment" style="margin-top:8px">Row $t$ keeps the rewards from time $t$ on: $\psi_t\, \gamma^t G_t$.</p>
+      <div class="box algo fragment" style="font-size:19px; margin-top:8px; padding:10px 18px"><span class="box-title">REINFORCE with reward-to-go</span>
+        Repeat:<br>
+        1. Run $\pi_\theta$: $\;S_0, A_0, R_1, \dots, S_{T-1}, A_{T-1}, R_T$<br>
+        2. For $t = T-1, \dots, 0$: $\;G_t = R_{t+1} + \gamma\, G_{t+1}$ <span class="muted">($G_T = 0$)</span><br>
+        3. $\theta \leftarrow \theta + \alpha \sum_{t} \gamma^t\, \htmlClass{pg-hl}{G_t}\, \nabla_\theta \log \pi_\theta(A_t|S_t)$
+      </div>
+    </div>
+    <div>
+      <ul class="small">
+        <li class="fragment">The dropped terms have mean $0$ but not variance $0$: they are <b>pure noise</b>.</li>
+        <li class="fragment">The longer the trajectory and the more rewards along the way, the more terms we drop (about half of $T^2$).</li>
+        <li class="fragment">In our two-exit maze all the reward comes at the end: $\gamma^t G_t = R(\tau)$ for every $t$, so causality gains <b>nothing here</b>. To see it work, the next demos charge a <b>cost of 0.2 per step</b>: rewards along the way.</li>
+      </ul>
+    </div>
+  </div>
+
+  <aside class="notes">Make the table appear row by row if you like. The take-away: causality is free, never hurts, and its benefit depends on where the rewards are.</aside>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">Maze</span>Causality in action: one θ, two estimators</h2>
+  <div class="pg-lab" data-mode="cloud" data-cost="0.2" data-theta="0.5,-0.5" data-alpha="1" data-size="430" data-kinds="full,rtg" data-kind="full"
+       data-caption="Same maze, but <b>every step costs 0.2</b>: rewards now come along the way. Background: $J(\theta)$ for this variant. Each dot: $\theta + \alpha\hat g$ for one trajectory, with the <b>full return</b> $R(\tau)$ or the <b>reward-to-go</b> $\gamma^t G_t$."></div>
+  <aside class="notes">θ = (0.5, −0.5), as in the earlier demos. "sample 20" with "full return", then with "reward-to-go": the cloud shrinks, the centre (ring) stays. "compare estimators": E‖ĝ − ∇J‖² over 2000 trajectories ≈ 11.4 for the full return vs ≈ 3.0 with reward-to-go (‖∇J‖² ≈ 0.57). About four times less variance, for free. (At θ = 0 it is 9.0 vs 1.9, but there the step cost makes the exact gradient point towards the small exit.) Why: long trajectories that wander accumulate many −0.2 costs; with the full return these early costs multiply every later score, with reward-to-go they don't.</aside>
+</section>
+
+<section class="slide">
+  <h2><span class="kicker">Maze</span>REINFORCE with reward-to-go, in action</h2>
+  <div class="pg-lab" data-mode="live" data-cost="0.2" data-kinds="full,rtg" data-kind="rtg" data-theta="1,-1" data-alpha="0.5" data-steps="100" data-seed="13" data-size="370" data-maze-size="210"></div>
+  <aside class="notes">Same step-cost variant (0.2 per step), θ0 = (1, −1), α = 0.5, 100 updates. Switch between "full return" and "reward-to-go" and press play; "new seed" for another run. The effect on single runs is modest and seed-dependent; over 40 seeds the reward-to-go path stays closer to exact ascent (mean distance 1.1 vs 1.7) and never ends at the small exit (0/40 vs 4/40). The clear effect is the variance of each estimate (previous slide).</aside>
+</section>
+
+<section class="slide">
+  <h2>Summary</h2>
+  <div class="cols c-60-40">
+    <ul class="small">
+      <li>Policy search: $\max_\theta J(\theta)$. Already with two parameters, $J$ has two basins.</li>
+      <li class="fragment"><b>Black-box</b> ideas (CEM, finite differences): simple, but one number per trajectory, and they scale badly with $\dim\theta$.</li>
+      <li class="fragment"><b>Log-derivative trick</b>: the dynamics cancel, $\;\nabla J = \E\big[R(\tau)\sum_t \nabla\log\pi_\theta(A_t|S_t)\big]$.</li>
+      <li class="fragment"><b>REINFORCE</b>: estimate it with sampled trajectories. Unbiased, on-policy, <b>very noisy</b>: on a non-concave $J$, noise changes where we end up.</li>
+      <li class="fragment"><b>Causality</b>: an action cannot change the past. Weight each score by the reward-to-go $\gamma^t G_t$: no bias, less variance.</li>
+    </ul>
+    <div class="box discuss fragment"><span class="box-title">Next</span>
+      <p><b>Exercise session</b>: a second way to remove zero-mean noise from $\hat g$.</p>
+      <p style="margin-top:10px"><b>Next week</b>: the same gradient, state by state (the policy gradient theorem), and what the value function has to do with it.</p>
+    </div>
+  </div>
+  <aside class="notes">The exercise session introduces baselines (hidden slides after this part, to reveal next week).</aside>
+</section>
+
+<!-- HIDDEN (baselines: revealed after the exercise session). To show it: change class="slide-hidden" back to class="slide". -->
+<section class="slide-hidden">
+  <h2>Baselines (1/2): compare with a reference return</h2>
+  <p>Pick a number $b$, <b>given and fixed</b> before we see the trajectory. It must not depend on the actions of $\tau$.</p>
+  <div class="eq-big">$$\E\Big[\, b \sum_t \nabla_\theta \log \pi_\theta(A_t|S_t) \Big]
+  \htmlClass{fragment}{{}= b \sum_t \E\Big[\underbrace{\E\big[\nabla_\theta \log \pi_\theta(A_t|S_t) \,\big|\, S_t\big]}_{=\,0}\Big]}
+  \htmlClass{fragment}{{}= 0}$$</div>
+  <div class="box theorem fragment"><span class="box-title">Unbiased for any such $b$</span>
+    $$\hat g_b = \big(R(\tau) - \cfut{b}\big) \sum_t \nabla_\theta \log \pi_\theta(A_t|S_t), \qquad \E\big[\hat g_b\big] = \nabla_\theta J(\theta).$$
+  </div>
+  <p class="small fragment">$b$ is our <b>reference</b>: what return do we usually get? Trajectories that do better than $b$ push their actions up, the others push them down.</p>
+  <aside class="notes">Insist: for now b is a number we choose, fixed during the update. Not learned, not state-dependent. A baseline b(s) that depends on the state is possible too, but it needs the step-by-step view of the gradient: next week.</aside>
+</section>
+
+<!-- HIDDEN (baselines: revealed after the exercise session). To show it: change class="slide-hidden" back to class="slide". -->
+<section class="slide-hidden">
+  <h2>Baselines (2/2): every $b$ is unbiased, not every $b$ helps</h2>
+  <div class="cols c-60-40">
+    <div>
+      <table>
+        <tr><th>Baseline</th><th>Comment</th></tr>
+        <tr><td>$b = 0$</td><td>plain REINFORCE</td></tr>
+        <tr class="fragment"><td>$b = 3$</td><td>arbitrary constant: still unbiased, but it can make the variance <b>worse</b></td></tr>
+        <tr class="fragment"><td>$b = $ running average</td><td>average of the returns seen so far: practical, needs no model</td></tr>
+        <tr class="fragment"><td>$b = J(\theta)$</td><td>the exact average return $V^{\pi_\theta}(s_1)$: an <b>oracle</b>, computed from the model</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="box theorem fragment small"><span class="box-title">Intuition</span>
+        Without a baseline, every action is pushed up (all returns are $\ge 0$). With a good reference, actions of trajectories that did worse than usual are pushed <b>down</b>: the sign carries information.
+      </div>
+      <div class="box practice fragment small"><span class="box-title">In the demos</span>
+        Running average: $b$ = first return, then $b \leftarrow b + 0.3\,(R(\tau) - b)$ after each trajectory. The oracle $J(\theta)$ is only there for comparison.
+      </div>
+    </div>
+  </div>
+  <aside class="notes">Variance intuition (one step): it is driven by E[(R − b)² ‖∇log π‖²], so b should be close to the returns we typically see. A constant far from the returns (b = 3; returns are in [0, 2.95]) inflates every term. The variance-minimising constant is in the appendix.</aside>
+</section>
+
+<!-- HIDDEN (baselines: revealed after the exercise session). To show it: change class="slide-hidden" back to class="slide". -->
+<section class="slide-hidden">
+  <h2><span class="kicker">Maze</span>One θ, three baselines</h2>
+  <div class="pg-lab" data-mode="cloud" data-theta="1,0" data-alpha="1" data-size="430" data-kinds="none,arb,const" data-kind="const"></div>
+  <aside class="notes">Click "compare estimators": bars show E‖ĝ − ∇J‖² over 2000 trajectories at θ = (1, 0): no baseline ≈ 6.3, b = 3 (arbitrary) ≈ 19.9, b = J(θ) ≈ 2.4, against ‖∇J‖² ≈ 0.66. An arbitrary baseline is still unbiased but can triple the variance. Then "sample 20" with each: all clouds have the same centre. The running average is not shown here: at a fixed θ it is just an estimate of J(θ).</aside>
+</section>
+
+<!-- HIDDEN (baselines: revealed after the exercise session). To show it: change class="slide-hidden" back to class="slide". -->
+<section class="slide-hidden">
+  <h2><span class="kicker">Maze</span>REINFORCE with a baseline, in action</h2>
+  <div class="pg-lab" data-mode="live" data-kinds="none,avg,const" data-kind="avg" data-theta="0.5,-0.5" data-alpha="0.5" data-steps="150" data-seed="13" data-size="370" data-maze-size="210"></div>
+  <aside class="notes">Same seed (13) and α as before. "play" with the running average: the run now reaches the big exit. Switch to "no baseline": stuck at the small exit again, as before. Oracle b = J(θ): reaches the big exit too. One seed is an anecdote; the next slide runs many.</aside>
+</section>
+
+<section class="slide">
+  <h2>References</h2>
+  <ul class="small">
+    <li>R. Sutton, A. Barto. <i>Reinforcement Learning: An Introduction</i>, 2nd ed., 2018. Chapter 13.</li>
+    <li>R. J. Williams. Simple statistical gradient-following algorithms for connectionist reinforcement learning. <i>Machine Learning</i>, 1992.</li>
+    <li>R. Rubinstein. The cross-entropy method for combinatorial and continuous optimization. 1999.</li>
+    <li>I. Szita, A. Lőrincz. Learning Tetris using the noisy cross-entropy method. <i>Neural Computation</i>, 2006.</li>
+    <li>N. Kohl, P. Stone. Policy gradient reinforcement learning for fast quadrupedal locomotion. ICRA 2004.</li>
+    <li>T. Salimans, J. Ho, X. Chen, S. Sidor, I. Sutskever. Evolution strategies as a scalable alternative to reinforcement learning. 2017.</li>
+    <li>E. Greensmith, P. Bartlett, J. Baxter. Variance reduction techniques for gradient estimates in RL. JMLR 2004.</li>
+    <li>C. Nota, P. Thomas. Is the policy gradient a gradient? AAMAS 2020.</li>
+    <li>G. Martius. RL lectures on policy gradient, Universität Tübingen, 2026.</li>
+  </ul>
+</section>
+
+<!-- HIDDEN (appendix with the baseline slide: revealed after the exercise session). To show it: change class="slide-hidden" back to class="slide". -->
+<section class="slide-hidden section">
+  <div class="num">Appendix</div>
+  <h2>Details</h2>
+  <p>Self-study.</p>
+</section>
+
+<!-- HIDDEN (baselines: revealed after the exercise session). To show it: change class="slide-hidden" back to class="slide". -->
+<section class="slide-hidden">
+  <h2><span class="kicker">Self-study</span>Which baseline minimises the variance?</h2>
+  <p class="small">One-step case: $g = (G - b)\, \nabla \log \pi_\theta(A|S)$ and a constant $b$ (per coordinate $i$). Since $\E[g]$ does not depend on $b$, minimise the second moment:</p>
+  $$\frac{d}{db}\E\big[(G - b)^2 (\partial_i \log\pi_\theta)^2\big] = 0 \quad\Longrightarrow\quad b_i^\star = \frac{\E\big[G\, (\partial_i \log\pi_\theta)^2\big]}{\E\big[(\partial_i \log\pi_\theta)^2\big]}$$
+  <ul class="small">
+    <li>A <b>score-weighted</b> average return: not exactly $V^\pi$, but close when $G$ and the score magnitude are weakly correlated.</li>
+    <li>$V^\pi(s)$ is a natural choice: one number per state, close to $b^\star$ in many problems.</li>
+    <li>See Greensmith, Bartlett &amp; Baxter (2004) for the state-dependent version.</li>
+  </ul>
+</section>
+
+</main>
+
+<script src="../assets/katex/katex.min.js"></script>
+<script src="../assets/katex/auto-render.min.js"></script>
+<script src="../assets/macros.js"></script>
+<script src="../assets/maze.js"></script>
+<script src="../assets/pg.js"></script>
+<script src="../assets/deck.js"></script>
+</body>
+</html>
