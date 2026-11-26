@@ -522,17 +522,22 @@
 
 <section class="slide">
   <h2>Why is $\hat g$ so noisy?</h2>
-  <div class="cols c-40-60">
+  <div class="cols" style="grid-template-columns: 400px minmax(0,1fr); gap: 36px">
     <ul class="small">
       <li>One trajectory = <b>one sample</b> of a random vector.</li>
       <li class="fragment">$R(\tau)$ carries the randomness of <b>every</b> action and transition of the trajectory.</li>
       <li class="fragment">$\hat g$ sums $T$ score terms: the noise grows with the <b>horizon</b>.</li>
       <li class="fragment">All returns are $\ge 0$ here: <b>every</b> action taken is reinforced, even in a bad trajectory. The signal is only in the <b>differences</b> between pushes.</li>
     </ul>
-    <div class="box discuss fragment"><span class="box-title">One free lunch</span>
-      <b>The score has mean zero</b> in every state:
-      $$\E_{a\sim\pi_\theta(\cdot|s)}\big[\nabla_\theta \log \pi_\theta(a|s)\big] = \sum_a \nabla_\theta \pi_\theta(a|s) = \nabla_\theta 1 = 0.$$
-      So any term of $\hat g$ that multiplies a score by something the action <b>cannot influence</b> has mean zero: we can drop it without bias.
+    <div class="fragment">
+      <div class="box discuss" style="margin-bottom:10px"><span class="box-title">One free lunch</span>
+        <b>The score has mean zero</b> in every state:
+        <div style="font-size:21px">$$\begin{aligned}\E_{a\sim\pi_\theta(\cdot|s)}\big[\nabla_\theta \log \pi_\theta(a|s)\big] &= \sum_a \htmlClass{pg-hl}{\pi_\theta(a|s)\, \nabla_\theta \log \pi_\theta(a|s)} \\ &= \sum_a \nabla_\theta \pi_\theta(a|s) = \nabla_\theta \sum_a \pi_\theta(a|s) = \nabla_\theta 1 = 0.\end{aligned}$$</div>
+        So any term of $\hat g$ that multiplies a score by something the action <b>cannot influence</b> has mean zero: we can drop it without bias.
+      </div>
+      <div class="box definition small" style="padding:8px 16px; margin:0"><span class="box-title">Reminder: log-derivative trick</span>
+        $\htmlClass{pg-hl}{\pi_\theta\, \nabla_\theta \log \pi_\theta} = \nabla_\theta \pi_\theta$, since $\nabla \log \pi = \nabla \pi / \pi$.
+      </div>
     </div>
   </div>
 </section>
